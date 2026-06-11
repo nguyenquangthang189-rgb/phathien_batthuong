@@ -148,6 +148,9 @@ if trigger_train:
             X_train_scaled = scaler.fit_transform(X_train)
             X_test_scaled = scaler.transform(X_test)
             
+            # SỬA LỖI WARNING: Khôi phục lại định dạng DataFrame kèm tên cột sau khi scale dữ liệu kiểm định
+            X_test_scaled_df = pd.DataFrame(X_test_scaled, columns=FEATURES)
+            
             # Khởi tạo mô hình theo tham số người dùng chọn ở sidebar
             model = RandomForestClassifier(
                 n_estimators=n_estimators,
@@ -159,9 +162,9 @@ if trigger_train:
             )
             model.fit(X_train_scaled, y_train)
             
-            # Dự đoán trên tập test phục vụ tab đánh giá
-            y_pred = model.predict(X_test_scaled)
-            y_prob = model.predict_proba(X_test_scaled)[:, 1] if hasattr(model, "predict_proba") else None
+            # Dự đoán sử dụng DataFrame có đầy đủ tên cột đã sửa lỗi
+            y_pred = model.predict(X_test_scaled_df)
+            y_prob = model.predict_proba(X_test_scaled_df)[:, 1] if hasattr(model, "predict_proba") else None
             
             # Lưu trữ 3 đối tượng quan trọng vào st.session_state theo quy tắc
             st.session_state['trained_model'] = model
@@ -410,9 +413,12 @@ with tab4:
                 # Thực hiện chuẩn hóa chuẩn xác theo bộ scaler gốc
                 input_scaled = scaler.transform(input_df)
                 
-                # Thực hiện dự báo nhãn và xác suất
-                prediction = model.predict(input_scaled)[0]
-                prediction_proba = model.predict_proba(input_scaled)[0]
+                # SỬA LỖI WARNING: Khôi phục tên cột cho dữ liệu vừa được scale
+                input_scaled_df = pd.DataFrame(input_scaled, columns=FEATURES)
+                
+                # Thực hiện dự báo nhãn và xác suất sử dụng DataFrame đã sửa lỗi
+                prediction = model.predict(input_scaled_df)[0]
+                prediction_proba = model.predict_proba(input_scaled_df)[0]
                 
                 st.divider()
                 st.markdown("### Kết quả đánh giá từ hệ thống AI:")
@@ -462,9 +468,12 @@ with tab4:
                         # Sử dụng bộ tiền xử lý chuẩn hóa lúc train
                         X_batch_scaled = scaler.transform(X_batch)
                         
-                        # Dự báo hàng loạt
-                        batch_predictions = model.predict(X_batch_scaled)
-                        batch_proba = model.predict_proba(X_batch_scaled)[:, 1]
+                        # SỬA LỖI WARNING: Chuyển đổi dữ liệu sau scale thành DataFrame kèm đúng tên cột
+                        X_batch_scaled_df = pd.DataFrame(X_batch_scaled, columns=FEATURES)
+                        
+                        # Dự báo hàng loạt sử dụng DataFrame có tên cột
+                        batch_predictions = model.predict(X_batch_scaled_df)
+                        batch_proba = model.predict_proba(X_batch_scaled_df)[:, 1]
                         
                         # Ghép kết quả đầu ra vào DataFrame hiển thị
                         df_result = df_batch.copy()
