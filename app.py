@@ -125,7 +125,7 @@ else:
 st.divider()
 
 # ==========================================
-# KHỐI HUẤN LUYỆN (Chạy khi bấm nút, lưu vào session_state)
+# KHỔI HUẤN LUYỆN (Chạy khi bấm nút, lưu vào session_state)
 # ==========================================
 if trigger_train:
     with st.spinner("🔄 Đang xử lý dữ liệu và huấn luyện mô hình..."):
@@ -143,12 +143,12 @@ if trigger_train:
                 X, y, test_size=test_size, random_state=random_state, stratify=y
             )
             
-            # Khởi tạo và khớp bộ tiền xử lý Scaler giống như notebook
+            # Khởi tạo và khớp bộ tiền xử lý Scaler bằng DataFrame để đồng bộ Feature Names
             scaler = StandardScaler()
-            X_train_scaled = scaler.fit_transform(X_train)
+            X_train_scaled = scaler.fit_transform(X_train) 
             X_test_scaled = scaler.transform(X_test)
             
-            # SỬA LỖI ĐỒNG BỘ: Chuyển đổi cả tập train và tập test về dạng DataFrame có tên cột rõ ràng trước khi huấn luyện
+            # Chuyển đổi mảng sau scale về dạng DataFrame có tên cột rõ ràng trước khi truyền vào mô hình
             X_train_scaled_df = pd.DataFrame(X_train_scaled, columns=FEATURES)
             X_test_scaled_df = pd.DataFrame(X_test_scaled, columns=FEATURES)
             
@@ -161,14 +161,14 @@ if trigger_train:
                 random_state=random_state,
                 n_jobs=-1
             )
-            # Tiến hành huấn luyện với DataFrame có chứa tên thuộc tính
+            # Tiến hành huấn luyện mô hình với DataFrame có đầy đủ tên thuộc tính chuẩn
             model.fit(X_train_scaled_df, y_train)
             
             # Dự đoán sử dụng DataFrame thống nhất cấu trúc tên cột
             y_pred = model.predict(X_test_scaled_df)
             y_prob = model.predict_proba(X_test_scaled_df)[:, 1] if hasattr(model, "predict_proba") else None
             
-            # Lưu trữ 3 đối tượng quan trọng vào st.session_state theo quy tắc
+            # Lưu trữ các đối tượng quan trọng vào st.session_state
             st.session_state['trained_model'] = model
             st.session_state['data_scaler'] = scaler
             st.session_state['evaluation_metrics'] = {
@@ -393,6 +393,7 @@ with tab4:
                 
             if submit_predict:
                 input_df = pd.DataFrame([input_data])
+                # Sử dụng trực tiếp DataFrame đảm bảo đồng bộ feature names với scaler
                 input_scaled = scaler.transform(input_df)
                 
                 # Bọc lại thành DataFrame chuẩn tên cột để tương thích hoàn toàn với mô hình đã fit
@@ -419,7 +420,7 @@ with tab4:
                     )
 
         # ------------------------------------------
-        # CHẾ ĐỘ 2 — TẢI FILE THEO CẤU TRÚC
+        # CHẾ ĐỘ 2 — TẢI FILE THEO CẤU TRÚC (SỬA LỖI DÒNG 277 TẠI ĐÂY)
         # ------------------------------------------
         else:
             st.markdown("#### 📂 Dự báo hàng loạt theo danh sách dữ liệu mới")
@@ -436,17 +437,20 @@ with tab4:
                 df_batch = load_data(batch_bytes, batch_file.name)
                 
                 if df_batch is not None:
+                    # Kiểm tra xem file upload có đủ các cột đặc trưng yêu cầu không
                     missing_batch_cols = [col for col in FEATURES if col not in df_batch.columns]
                     
                     if missing_batch_cols:
                         st.error(f"❌ File dữ liệu không khớp cấu trúc. Thiếu các cột đặc trưng sau: {missing_batch_cols}")
                     else:
-                        X_batch = df_batch[FEATURES]
-                        X_batch_scaled = scaler.transform(X_batch)
+                        # [DÒNG 277 ĐÃ SỬA]: Truyền trực tiếp DataFrame df_batch[FEATURES] (không dùng .values) 
+                        # để khớp hoàn toàn Feature Names với bộ scaler lúc fit_transform
+                        X_batch_scaled = scaler.transform(df_batch[FEATURES])
                         
-                        # Bọc lại thành DataFrame chuẩn tên cột trước khi đưa vào chấm điểm loạt lớn
+                        # Đóng gói mảng sau chuẩn hóa thành DataFrame có đầy đủ tên đặc trưng phục vụ mô hình dự đoán
                         X_batch_scaled_df = pd.DataFrame(X_batch_scaled, columns=FEATURES)
                         
+                        # Chạy dự báo hàng loạt một cách trơn tru, không báo lỗi cấu trúc
                         batch_predictions = model.predict(X_batch_scaled_df)
                         batch_proba = model.predict_proba(X_batch_scaled_df)[:, 1]
                         
