@@ -148,7 +148,8 @@ if trigger_train:
             X_train_scaled = scaler.fit_transform(X_train)
             X_test_scaled = scaler.transform(X_test)
             
-            # SỬA LỖI WARNING: Khôi phục lại định dạng DataFrame kèm tên cột sau khi scale dữ liệu kiểm định
+            # SỬA LỖI ĐỒNG BỘ: Chuyển đổi cả tập train và tập test về dạng DataFrame có tên cột rõ ràng trước khi huấn luyện
+            X_train_scaled_df = pd.DataFrame(X_train_scaled, columns=FEATURES)
             X_test_scaled_df = pd.DataFrame(X_test_scaled, columns=FEATURES)
             
             # Khởi tạo mô hình theo tham số người dùng chọn ở sidebar
@@ -160,9 +161,10 @@ if trigger_train:
                 random_state=random_state,
                 n_jobs=-1
             )
-            model.fit(X_train_scaled, y_train)
+            # Tiến hành huấn luyện với DataFrame có chứa tên thuộc tính
+            model.fit(X_train_scaled_df, y_train)
             
-            # Dự đoán sử dụng DataFrame có đầy đủ tên cột đã sửa lỗi
+            # Dự đoán sử dụng DataFrame thống nhất cấu trúc tên cột
             y_pred = model.predict(X_test_scaled_df)
             y_prob = model.predict_proba(X_test_scaled_df)[:, 1] if hasattr(model, "predict_proba") else None
             
@@ -210,7 +212,6 @@ with tab1:
     st.dataframe(df_raw.head(), use_container_width=True)
     
     st.markdown("### 📉 Thống kê mô tả các biến đặc trưng mô hình")
-    # Chỉ hiển thị thống kê đối với các biến đưa vào mô hình (X và y) theo mô tả quy tắc
     available_model_cols = [col for col in FEATURES + [TARGET] if col in df_raw.columns]
     if available_model_cols:
         st.dataframe(df_raw[available_model_cols].describe().T, use_container_width=True)
@@ -223,13 +224,10 @@ with tab1:
 with tab2:
     st.subheader("Biểu đồ phân tích phân phối thuộc tính")
     
-    # Ưu tiên kiểm tra mục tiêu 'default'
     if TARGET in df_raw.columns:
-        # Lưới 2x2 cho cân đối trực quan
         row1_col1, row1_col2 = st.columns(2)
         row2_col1, row2_col2 = st.columns(2)
         
-        # 1. Biểu đồ phân phối biến mục tiêu (y)
         with row1_col1:
             target_counts = df_raw[TARGET].value_counts().reset_index()
             target_counts.columns = ['Trạng thái (default)', 'Số lượng']
@@ -241,7 +239,6 @@ with tab2:
             )
             st.plotly_chart(fig_target, use_container_width=True)
             
-        # 2. Phân phối của biến đầu vào quan trọng X_1 (Liên tục)
         with row1_col2:
             if 'X_1' in df_raw.columns:
                 fig_x1 = px.histogram(
@@ -251,7 +248,6 @@ with tab2:
                 )
                 st.plotly_chart(fig_x1, use_container_width=True)
                 
-        # 3. Phân phối của thuộc tính X_2 (Liên tục)
         with row2_col1:
             if 'X_2' in df_raw.columns:
                 fig_x2 = px.histogram(
@@ -261,7 +257,6 @@ with tab2:
                 )
                 st.plotly_chart(fig_x2, use_container_width=True)
                 
-        # 4. Mối quan hệ tương quan giữa X_1 và X_2
         with row2_col2:
             if 'X_1' in df_raw.columns and 'X_2' in df_raw.columns:
                 fig_scatter = px.scatter(
@@ -271,7 +266,6 @@ with tab2:
                 )
                 st.plotly_chart(fig_scatter, use_container_width=True)
                 
-        # Hỗ trợ cấu hình động nếu người dùng muốn khám phá thêm nhiều biến khác
         st.divider()
         st.markdown("### 🔍 Tùy chọn phân tích chuyên sâu các biến khác")
         all_features = [col for col in df_raw.columns if col != TARGET]
@@ -294,13 +288,11 @@ with tab2:
 with tab3:
     st.subheader("🎯 Đánh giá hiệu năng mô hình toán học")
     
-    # Điều phối: Kiểm tra nếu chưa bấm huấn luyện ở sidebar
     if 'evaluation_metrics' not in st.session_state:
         st.info("ℹ️ Vui lòng thiết lập tham số và nhấn nút **🚀 Huấn luyện mô hình** tại Sidebar để xem kết quả phân tích kiểm định.")
     else:
         metrics = st.session_state['evaluation_metrics']
         
-        # 1. Trình bày các chỉ tiêu vô hướng qua st.metric
         m_col1, m_col2, m_col3, m_col4 = st.columns(4)
         m_col1.metric("Độ chính xác (Accuracy)", f"{metrics['accuracy']:.4f}")
         m_col2.metric("Độ chuẩn xác (Precision)", f"{metrics['precision']:.4f}")
@@ -311,7 +303,6 @@ with tab3:
         
         col_left, col_right = st.columns(2)
         
-        # 2. Ma trận nhầm lẫn (Confusion Matrix)
         with col_left:
             st.markdown("#### 📊 Ma trận nhầm lẫn (Confusion Matrix)")
             cm = confusion_matrix(metrics['y_true'], metrics['y_pred'])
@@ -324,13 +315,11 @@ with tab3:
             )
             st.plotly_chart(fig_cm, use_container_width=True)
             
-            # Classification report dạng bảng
             st.markdown("#### 📝 Báo cáo chi tiết lớp (Classification Report)")
             report_dict = classification_report(metrics['y_true'], metrics['y_pred'], output_dict=True)
             report_df = pd.DataFrame(report_dict).transpose()
             st.dataframe(report_df.style.format(precision=4), use_container_width=True)
 
-        # 3. Biểu đồ ROC Curve và Độ quan trọng của biến
         with col_right:
             if metrics['y_prob'] is not None:
                 st.markdown("#### 📈 Đường cong ROC (Receiver Operating Characteristic)")
@@ -359,7 +348,6 @@ with tab3:
 with tab4:
     st.subheader("🔮 Hệ thống dự báo rủi ro giao dịch mới")
     
-    # Kiểm tra trạng thái mô hình
     if 'trained_model' not in st.session_state or 'data_scaler' not in st.session_state:
         st.info("ℹ️ Vui lòng chạy huấn luyện mô hình ở mục Sidebar trước khi thực hiện chức năng dự báo.")
     else:
@@ -378,16 +366,13 @@ with tab4:
         if mode == "Chế độ 1: Nhập trực tiếp thủ công":
             st.markdown("#### 📝 Điền thông số giao dịch cần kiểm tra")
             
-            # Tính toán thông số cơ bản từ tập dữ liệu thô phục vụ giá trị mặc định lý tưởng
             with st.form("single_prediction_form"):
                 form_cols = st.columns(3)
                 input_data = {}
                 
                 for idx, feature in enumerate(FEATURES):
-                    # Phân bổ đều các widget đầu vào vào 3 cột thiết kế
                     col_target = form_cols[idx % 3]
                     
-                    # Lấy min, max, median từ dữ liệu gốc để cấu hình biên hợp lý
                     if feature in df_raw.columns:
                         min_val = float(df_raw[feature].min())
                         max_val = float(df_raw[feature].max())
@@ -407,16 +392,12 @@ with tab4:
                 submit_predict = st.form_submit_button("🛡️ Kiểm tra mức độ rủi ro", type="primary", use_container_width=True)
                 
             if submit_predict:
-                # Chuyển dữ liệu sang DataFrame đơn dòng
                 input_df = pd.DataFrame([input_data])
-                
-                # Thực hiện chuẩn hóa chuẩn xác theo bộ scaler gốc
                 input_scaled = scaler.transform(input_df)
                 
-                # SỬA LỖI WARNING: Khôi phục tên cột cho dữ liệu vừa được scale
+                # Bọc lại thành DataFrame chuẩn tên cột để tương thích hoàn toàn với mô hình đã fit
                 input_scaled_df = pd.DataFrame(input_scaled, columns=FEATURES)
                 
-                # Thực hiện dự báo nhãn và xác suất sử dụng DataFrame đã sửa lỗi
                 prediction = model.predict(input_scaled_df)[0]
                 prediction_proba = model.predict_proba(input_scaled_df)[0]
                 
@@ -438,7 +419,7 @@ with tab4:
                     )
 
         # ------------------------------------------
-        # CHẾ ĐỘ 2 — TẢI FILE THEO CẤU TRÚC (Ví dụ X_new.xlsx)
+        # CHẾ ĐỘ 2 — TẢI FILE THEO CẤU TRÚC
         # ------------------------------------------
         else:
             st.markdown("#### 📂 Dự báo hàng loạt theo danh sách dữ liệu mới")
@@ -451,31 +432,24 @@ with tab4:
             )
             
             if batch_file is not None:
-                # Đọc tệp dữ liệu loạt mới
                 batch_bytes = batch_file.getvalue()
                 df_batch = load_data(batch_bytes, batch_file.name)
                 
                 if df_batch is not None:
-                    # Kiểm tra tính hợp lệ của lược đồ cột (schema)
                     missing_batch_cols = [col for col in FEATURES if col not in df_batch.columns]
                     
                     if missing_batch_cols:
                         st.error(f"❌ File dữ liệu không khớp cấu trúc. Thiếu các cột đặc trưng sau: {missing_batch_cols}")
                     else:
-                        # Trích xuất chính xác tập biến đưa vào mô hình dự đoán
                         X_batch = df_batch[FEATURES]
-                        
-                        # Sử dụng bộ tiền xử lý chuẩn hóa lúc train
                         X_batch_scaled = scaler.transform(X_batch)
                         
-                        # SỬA LỖI WARNING: Chuyển đổi dữ liệu sau scale thành DataFrame kèm đúng tên cột
+                        # Bọc lại thành DataFrame chuẩn tên cột trước khi đưa vào chấm điểm loạt lớn
                         X_batch_scaled_df = pd.DataFrame(X_batch_scaled, columns=FEATURES)
                         
-                        # Dự báo hàng loạt sử dụng DataFrame có tên cột
                         batch_predictions = model.predict(X_batch_scaled_df)
                         batch_proba = model.predict_proba(X_batch_scaled_df)[:, 1]
                         
-                        # Ghép kết quả đầu ra vào DataFrame hiển thị
                         df_result = df_batch.copy()
                         df_result['Dự báo rủi ro (Prediction)'] = batch_predictions
                         df_result['Xác suất gian lận (Probability)'] = batch_proba
@@ -483,16 +457,13 @@ with tab4:
                         
                         st.success(f"⚡ Đã xử lý và chấm điểm thành công cho toàn bộ {len(df_result)} giao dịch!")
                         
-                        # Thống kê tổng quan phân phối kết quả dự đoán hàng loạt
                         cnt_fraud = int((batch_predictions == 1).sum())
                         st.metric("Phát hiện tổng số ca rủi ro", f"{cnt_fraud} / {len(df_result)} giao dịch", 
                                   delta=f"Tỷ lệ {cnt_fraud/len(df_result)*100:.2f}%", delta_color="inverse")
                         
-                        # Hiển thị bảng kết quả tổng hợp trong khung cuộn gọn gàng
                         st.markdown("### 📋 Bảng kết quả dự báo chi tiết:")
                         st.dataframe(df_result, use_container_width=True)
                         
-                        # Xuất dữ liệu tải về ở định dạng CSV tiện ích (utf-8-sig để hiển thị tốt tiếng Việt trong Excel)
                         csv_buffer = io.StringIO()
                         df_result.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
                         csv_data = csv_buffer.getvalue()
